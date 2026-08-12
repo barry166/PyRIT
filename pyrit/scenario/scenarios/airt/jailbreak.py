@@ -16,7 +16,12 @@ from pyrit.models import (
     AttackTechniqueSeedGroup,
     Parameter,
     ScenarioRunSizeComponent,
-    ScenarioRunSizeEstimate,
+    ScenarioRunSizeEstimateCondition,
+)
+from pyrit.models.catalog import (
+    ScenarioDefaultRunSizeEstimate,
+    ScenarioRunSizeEstimateStatus,
+    ScenarioRunSizeFactor,
 )
 from pyrit.prompt_target import CapabilityName
 from pyrit.registry.components.attack_technique_registry import AttackTechniqueRegistry
@@ -135,9 +140,16 @@ def _build_jailbreak_technique() -> type[ScenarioTechnique]:
         type[ScenarioTechnique]: The dynamically generated technique enum class.
     """
     registry = AttackTechniqueRegistry.get_registry_singleton()
-    registered = [
-        factory for factory in registry.get_factories_or_raise().values() if _is_jailbreak_compatible_factory(factory)
-    ]
+    registry_factories = list(registry.get_factories_or_raise().values())
+    excluded_without_converter_composition = sorted(
+        factory.name for factory in registry_factories if not factory.supports_additional_request_converters
+    )
+    if excluded_without_converter_composition:
+        logger.warning(
+            "Jailbreak excluded attack technique factories that cannot compose the required request converter: %s",
+            ", ".join(excluded_without_converter_composition),
+        )
+    registered = [factory for factory in registry_factories if _is_jailbreak_compatible_factory(factory)]
     factories = registered + list(_extra_default_factories().values())
     return AttackTechniqueRegistry.build_technique_class_from_factories(  # type: ignore[return-value, ty:invalid-return-type]
         class_name="JailbreakTechnique",
@@ -340,12 +352,12 @@ class Jailbreak(Scenario):
         metadata[_JAILBREAK_TEMPLATES_METADATA_KEY] = list(self._resolved_jailbreaks)
         return metadata
 
-    async def _estimate_run_size_async(self) -> ScenarioRunSizeEstimate:
+    async def _estimate_run_size_async(self) -> ScenarioDefaultRunSizeEstimate:
         """
         Estimate the template and attempt axes, preserving the target capability caveat.
 
         Returns:
-            ScenarioRunSizeEstimate: Conditional target-aware estimate.
+            ScenarioDefaultRunSizeEstimate: Conditional target-aware estimate.
 
         Raises:
             ValueError: If native system-prompt delivery is the only selected
@@ -377,6 +389,7 @@ class Jailbreak(Scenario):
                 ScenarioRunSizeComponent(
                     label="Baseline",
                     count=seed_group_count,
+                    factors=[ScenarioRunSizeFactor(label="selected logical seed groups", count=seed_group_count)],
                     is_baseline=True,
                 )
             )
@@ -384,6 +397,12 @@ class Jailbreak(Scenario):
             ScenarioRunSizeComponent(
                 label="Inline jailbreak delivery",
                 count=seed_group_count * template_count * attempt_count * converter_count,
+                factors=[
+                    ScenarioRunSizeFactor(label="selected logical seed groups", count=seed_group_count),
+                    ScenarioRunSizeFactor(label="jailbreak templates", count=template_count),
+                    ScenarioRunSizeFactor(label="attempts", count=attempt_count),
+                    ScenarioRunSizeFactor(label="inline delivery techniques", count=converter_count),
+                ],
                 note=(
                     "Each planned unit is one template, one selected delivery technique, and one logical seed group. "
                     "num_jailbreaks selects templates; it is not a persisted result or attempt count."
@@ -395,6 +414,12 @@ class Jailbreak(Scenario):
                 ScenarioRunSizeComponent(
                     label="Native system-prompt jailbreak delivery",
                     count=seed_group_count * template_count * attempt_count,
+                    factors=[
+                        ScenarioRunSizeFactor(label="selected logical seed groups", count=seed_group_count),
+                        ScenarioRunSizeFactor(label="jailbreak templates", count=template_count),
+                        ScenarioRunSizeFactor(label="attempts", count=attempt_count),
+                    ],
+                    condition=ScenarioRunSizeEstimateCondition.TargetCapabilities,
                     note=(
                         "The selected objective target supports native system-prompt delivery."
                         if system_delivery_supported is True
@@ -417,10 +442,12 @@ class Jailbreak(Scenario):
             f"{converter_count} selected target-agnostic technique(s) x {attempt_count} configured attempt(s) "
             f"= {seed_group_count * template_count * attempt_count * converter_count} planned unit(s)."
         )
-        estimated_attack_count = (
-            None if system_delivery_selected and system_delivery_supported is None else planned_count
+        status = (
+            ScenarioRunSizeEstimateStatus.Conditional
+            if system_delivery_selected and system_delivery_supported is None
+            else ScenarioRunSizeEstimateStatus.Exact
         )
-        if estimated_attack_count is None:
+        if status is ScenarioRunSizeEstimateStatus.Conditional:
             capability_note = (
                 f" {target_agnostic_count} total planned units for target-agnostic delivery; "
                 f"{planned_count} when native system-prompt delivery is supported."
@@ -431,8 +458,18 @@ class Jailbreak(Scenario):
             capability_note = " The selected target does not support native system-prompt delivery, so it is omitted."
         else:
             capability_note = ""
-        return ScenarioRunSizeEstimate(
-            estimated_attack_count=estimated_attack_count,
+        return ScenarioDefaultRunSizeEstimate(
+            status=status,
+            total_attack_count=planned_count if status is ScenarioRunSizeEstimateStatus.Exact else None,
+            minimum_attack_count=(
+                target_agnostic_count if status is ScenarioRunSizeEstimateStatus.Conditional else None
+            ),
+            maximum_attack_count=planned_count if status is ScenarioRunSizeEstimateStatus.Conditional else None,
+            condition=(
+                ScenarioRunSizeEstimateCondition.TargetCapabilities
+                if status is ScenarioRunSizeEstimateStatus.Conditional
+                else None
+            ),
             components=components,
             datasets=datasets,
             note=f"{formula}{baseline_explanation}{capability_note}",

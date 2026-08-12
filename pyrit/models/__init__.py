@@ -18,11 +18,14 @@ ComponentIdentifier``).
 
 from pyrit.models.additional_initializer import AdditionalInitializer
 from pyrit.models.catalog import (
+    ScenarioAdaptiveRunSizeDetails,
     ScenarioDatasetSizeCap,
+    ScenarioDatasetSizeLimit,
     ScenarioDatasetSummary,
     ScenarioRunListItem,
     ScenarioRunSizeComponent,
     ScenarioRunSizeEstimate,
+    ScenarioRunSizeEstimateCondition,
     ScenarioRunSizeEstimateRequest,
 )
 from pyrit.models.conversation_stats import ConversationStats
@@ -230,11 +233,14 @@ __all__ = [
     "ScorerEvaluationIdentifier",
     "ScorerIdentifier",
     "ScenarioIdentifier",
+    "ScenarioAdaptiveRunSizeDetails",
     "ScenarioDatasetSizeCap",
+    "ScenarioDatasetSizeLimit",
     "ScenarioDatasetSummary",
     "ScenarioRunSizeEstimate",
     "ScenarioResult",
     "ScenarioRunSizeComponent",
+    "ScenarioRunSizeEstimateCondition",
     "ScenarioRunSizeEstimateRequest",
     "ScenarioRunListItem",
     "ScenarioRunState",

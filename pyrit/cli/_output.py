@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from pyrit.models.catalog import (
         RegisteredInitializer,
         RegisteredScenario,
+        ScenarioRunListItem,
         ScenarioRunSummary,
         TargetInstance,
     )
@@ -461,7 +462,7 @@ def print_attacks_table(*, payload: AttacksTablePayload) -> None:
 # ---------------------------------------------------------------------------
 
 
-def print_scenario_runs_list(*, runs: list[ScenarioRunSummary]) -> None:
+def print_scenario_runs_list(*, runs: list[ScenarioRunListItem]) -> None:
     """
     Print a list of scenario run summaries.
 
@@ -478,7 +479,7 @@ def print_scenario_runs_list(*, runs: list[ScenarioRunSummary]) -> None:
         created = run.created_at.isoformat() if run.created_at else "?"
         print(
             f"  {idx}) [{run.status.value}] {run.scenario_name} (id: {run.scenario_result_id}) — "
-            f"{run.total_attacks} attacks, {run.objective_achieved_rate}% success — {created}"
+            f"{run.total_attacks} planned attacks — {created}"
         )
     print("=" * 80)
     print(f"\nTotal runs: {len(runs)}")

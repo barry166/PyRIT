@@ -20,12 +20,10 @@ from pyrit.models.additional_initializer import AdditionalInitializer
 from pyrit.models.catalog import (
     ScenarioDatasetSizeCap,
     ScenarioDatasetSummary,
-    ScenarioDefaultRunSizeEstimate,
+    ScenarioRunListItem,
     ScenarioRunSizeComponent,
     ScenarioRunSizeEstimate,
     ScenarioRunSizeEstimateRequest,
-    ScenarioRunSizeEstimateStatus,
-    ScenarioRunSizeFactor,
 )
 from pyrit.models.conversation_stats import ConversationStats
 from pyrit.models.embeddings import EmbeddingData, EmbeddingResponse, EmbeddingSupport, EmbeddingUsageInformation
@@ -56,8 +54,8 @@ from pyrit.models.identifiers import (
     TargetIdentifier,
     class_name_to_snake_case,
     compute_eval_hash,
+    compute_seed_group_hash,
     config_hash,
-    logical_seed_group_fingerprint,
     snake_case_to_class_name,
     validate_registry_name,
 )
@@ -193,7 +191,7 @@ __all__ = [
     "IdentifierFilter",
     "IdentifierType",
     "JSONValue",
-    "logical_seed_group_fingerprint",
+    "compute_seed_group_hash",
     "COMMON_JSON_SCHEMAS",
     "JsonResponseConfig",
     "get_common_json_schema",
@@ -230,13 +228,11 @@ __all__ = [
     "ScenarioIdentifier",
     "ScenarioDatasetSizeCap",
     "ScenarioDatasetSummary",
-    "ScenarioDefaultRunSizeEstimate",
     "ScenarioRunSizeEstimate",
     "ScenarioResult",
     "ScenarioRunSizeComponent",
     "ScenarioRunSizeEstimateRequest",
-    "ScenarioRunSizeEstimateStatus",
-    "ScenarioRunSizeFactor",
+    "ScenarioRunListItem",
     "ScenarioRunState",
     "SCENARIO_RUN_PLAN_METADATA_KEY",
     "SCENARIO_RUN_PLAN_VERSION",

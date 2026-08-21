@@ -15,10 +15,8 @@ from pyrit.executor.attack.single_turn.prompt_sending import PromptSendingAttack
 from pyrit.models import (
     AttackTechniqueSeedGroup,
     Parameter,
-    ScenarioDefaultRunSizeEstimate,
     ScenarioRunSizeComponent,
-    ScenarioRunSizeEstimateStatus,
-    ScenarioRunSizeFactor,
+    ScenarioRunSizeEstimate,
 )
 from pyrit.prompt_target import CapabilityName
 from pyrit.registry.components.attack_technique_registry import AttackTechniqueRegistry
@@ -79,7 +77,7 @@ def _prompt_sending_factory() -> AttackTechniqueFactory:
         name=_PROMPT_SENDING,
         attack_class=PromptSendingAttack,
         technique_tags=["single_turn"],
-        supports_request_converter_composition=True,
+        supports_additional_request_converters=True,
     )
 
 
@@ -101,7 +99,7 @@ def _jailbreak_system_prompt_factory() -> AttackTechniqueFactory:
         name=_JAILBREAK_SYSTEM_PROMPT,
         attack_class=PromptSendingAttack,
         technique_tags=["single_turn"],
-        supports_request_converter_composition=True,
+        supports_additional_request_converters=True,
     )
 
 
@@ -121,7 +119,7 @@ def _is_jailbreak_compatible_factory(factory: AttackTechniqueFactory) -> bool:
     return (
         "multi_turn" not in factory.technique_tags
         and not has_simulated_conversation
-        and factory.supports_request_converter_composition
+        and factory.supports_additional_request_converters
     )
 
 
@@ -327,12 +325,12 @@ class Jailbreak(Scenario):
         metadata[_JAILBREAK_TEMPLATES_METADATA_KEY] = list(self._resolved_jailbreaks)
         return metadata
 
-    async def _estimate_run_size_async(self) -> ScenarioDefaultRunSizeEstimate:
+    async def _estimate_run_size_async(self) -> ScenarioRunSizeEstimate:
         """
         Estimate the template and attempt axes, preserving the target capability caveat.
 
         Returns:
-            ScenarioDefaultRunSizeEstimate: Conditional target-aware estimate.
+            ScenarioRunSizeEstimate: Conditional target-aware estimate.
 
         Raises:
             ValueError: If native system-prompt delivery is the only selected
@@ -364,7 +362,6 @@ class Jailbreak(Scenario):
                 ScenarioRunSizeComponent(
                     label="Baseline",
                     count=seed_group_count,
-                    factors=[ScenarioRunSizeFactor(label="selected logical seed groups", count=seed_group_count)],
                     is_baseline=True,
                 )
             )
@@ -372,12 +369,6 @@ class Jailbreak(Scenario):
             ScenarioRunSizeComponent(
                 label="Inline jailbreak delivery",
                 count=seed_group_count * template_count * attempt_count * converter_count,
-                factors=[
-                    ScenarioRunSizeFactor(label="selected logical seed groups", count=seed_group_count),
-                    ScenarioRunSizeFactor(label="jailbreak templates", count=template_count),
-                    ScenarioRunSizeFactor(label="attempts", count=attempt_count),
-                    ScenarioRunSizeFactor(label="inline delivery techniques", count=converter_count),
-                ],
                 note=(
                     "Each planned unit is one template, one selected delivery technique, and one logical seed group. "
                     "num_jailbreaks selects templates; it is not a persisted result or attempt count."
@@ -389,11 +380,6 @@ class Jailbreak(Scenario):
                 ScenarioRunSizeComponent(
                     label="Native system-prompt jailbreak delivery",
                     count=seed_group_count * template_count * attempt_count,
-                    factors=[
-                        ScenarioRunSizeFactor(label="selected logical seed groups", count=seed_group_count),
-                        ScenarioRunSizeFactor(label="jailbreak templates", count=template_count),
-                        ScenarioRunSizeFactor(label="attempts", count=attempt_count),
-                    ],
                     note=(
                         "The selected objective target supports native system-prompt delivery."
                         if system_delivery_supported is True
@@ -416,12 +402,10 @@ class Jailbreak(Scenario):
             f"{converter_count} selected target-agnostic technique(s) x {attempt_count} configured attempt(s) "
             f"= {seed_group_count * template_count * attempt_count * converter_count} planned unit(s)."
         )
-        status = (
-            ScenarioRunSizeEstimateStatus.Conditional
-            if system_delivery_selected and system_delivery_supported is None
-            else ScenarioRunSizeEstimateStatus.Exact
+        estimated_attack_count = (
+            None if system_delivery_selected and system_delivery_supported is None else planned_count
         )
-        if status is ScenarioRunSizeEstimateStatus.Conditional:
+        if estimated_attack_count is None:
             capability_note = (
                 f" {target_agnostic_count} total planned units for target-agnostic delivery; "
                 f"{planned_count} when native system-prompt delivery is supported."
@@ -432,9 +416,8 @@ class Jailbreak(Scenario):
             capability_note = " The selected target does not support native system-prompt delivery, so it is omitted."
         else:
             capability_note = ""
-        return ScenarioDefaultRunSizeEstimate(
-            status=status,
-            total_attack_count=planned_count if status is ScenarioRunSizeEstimateStatus.Exact else None,
+        return ScenarioRunSizeEstimate(
+            estimated_attack_count=estimated_attack_count,
             components=components,
             datasets=datasets,
             note=f"{formula}{baseline_explanation}{capability_note}",
@@ -629,7 +612,7 @@ class Jailbreak(Scenario):
             attack_class=PromptSendingAttack,
             technique_tags=["single_turn"],
             seed_technique=seed_technique,
-            supports_request_converter_composition=True,
+            supports_additional_request_converters=True,
         )
 
     @staticmethod

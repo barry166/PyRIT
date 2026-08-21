@@ -322,17 +322,6 @@ class ConversationManager:
         is_chat_target = target.configuration.includes(capability=CapabilityName.EDITABLE_HISTORY)
         if not is_chat_target:
             config = prepended_conversation_config or PrependedConversationConfig()
-            if request_converters:
-                present_roles = {
-                    piece.api_role for message in prepended_conversation for piece in message.message_pieces
-                }
-                excluded_roles = present_roles - set(config.apply_converters_to_roles)
-                if excluded_roles:
-                    raise ValueError(
-                        "Cannot preserve prepended-conversation converter role scoping for a non-chat target: "
-                        f"the flattened context contains excluded roles {sorted(excluded_roles)}. "
-                        "Use a chat target, remove request converters, or explicitly opt into every prepended role."
-                    )
             return await self._handle_non_chat_target_async(
                 context=context,
                 prepended_conversation=prepended_conversation,

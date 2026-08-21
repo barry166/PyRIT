@@ -17,7 +17,11 @@ from pyrit.models import (
     ObjectiveTargetEvaluationIdentifier,
     ScenarioResult,
     ScenarioRunSizeComponent,
-    ScenarioRunSizeEstimate,
+)
+from pyrit.models.catalog import (
+    ScenarioDefaultRunSizeEstimate,
+    ScenarioRunSizeEstimateStatus,
+    ScenarioRunSizeFactor,
 )
 from pyrit.models.parameter import Parameter
 from pyrit.registry import AttackTechniqueRegistry, TargetRegistry
@@ -199,7 +203,7 @@ class AdversarialBenchmark(Scenario):
             scenario_result_id=scenario_result_id,
         )
 
-    async def _estimate_run_size_async(self) -> ScenarioRunSizeEstimate:
+    async def _estimate_run_size_async(self) -> ScenarioDefaultRunSizeEstimate:
         """
         Estimate the target-by-technique matrix using execution compatibility.
 
@@ -209,7 +213,8 @@ class AdversarialBenchmark(Scenario):
         selected_groups, datasets = await self._resolve_dataset_groups_for_estimate_async()
         target_names = self.params.get("adversarial_targets") or []
         if not target_names:
-            return ScenarioRunSizeEstimate(
+            return ScenarioDefaultRunSizeEstimate(
+                status=ScenarioRunSizeEstimateStatus.Conditional,
                 datasets=datasets,
                 note=(
                     "A total is unavailable until adversarial_targets is supplied and resolved. Baseline is forbidden."
@@ -233,6 +238,11 @@ class AdversarialBenchmark(Scenario):
                 ScenarioRunSizeComponent(
                     label=technique.value,
                     count=len(resolved_targets) * compatible_count,
+                    factors=[
+                        ScenarioRunSizeFactor(label="selected concrete techniques", count=1),
+                        ScenarioRunSizeFactor(label="adversarial targets", count=len(resolved_targets)),
+                        ScenarioRunSizeFactor(label="compatible logical seed groups", count=compatible_count),
+                    ],
                 )
             )
 
@@ -242,7 +252,8 @@ class AdversarialBenchmark(Scenario):
                 reasons.append("Live behavioral-cache hits can suppress work")
             if self._estimate_has_binding_size_cap:
                 reasons.append("a binding randomized dataset cap may select a different compatibility mix at launch")
-            return ScenarioRunSizeEstimate(
+            return ScenarioDefaultRunSizeEstimate(
+                status=ScenarioRunSizeEstimateStatus.Conditional,
                 components=components,
                 datasets=datasets,
                 note=(
@@ -250,8 +261,9 @@ class AdversarialBenchmark(Scenario):
                     "so the authoritative total is unavailable before launch."
                 ),
             )
-        return ScenarioRunSizeEstimate(
-            estimated_attack_count=sum(component.count for component in components),
+        return ScenarioDefaultRunSizeEstimate(
+            status=ScenarioRunSizeEstimateStatus.Exact,
+            total_attack_count=sum(component.count for component in components),
             components=components,
             datasets=datasets,
             note="Baseline is forbidden; retries and internal attack turns are excluded.",

@@ -72,8 +72,8 @@ from pyrit.models.catalog import (
     AttackRetrySummary,
     RunScenarioRequest,
     ScenarioOverloadSummary,
-    ScenarioRunListItem,
     ScenarioRunHeader,
+    ScenarioRunListItem,
     ScenarioRunSummary,
     ScenarioTargetSummary,
 )
@@ -1266,7 +1266,11 @@ class ScenarioRunService:
         Returns:
             list[str]: De-duplicated technique display names.
         """
-        configured = list(dict.fromkeys(scenario_identifier.techniques or [])) if scenario_identifier else []
+        configured = (
+            list(dict.fromkeys(str(technique) for technique in scenario_identifier.techniques or []))
+            if scenario_identifier
+            else []
+        )
         if configured:
             return configured
         if atomic_groups is not None:
@@ -1978,7 +1982,8 @@ class ScenarioRunService:
     def _map_progress_delta(
         *,
         delta: ScenarioAttackResultDelta,
-        plan_lookup: _ScenarioPlanLookup,
+        plan: ScenarioRunPlan | None = None,
+        plan_lookup: _ScenarioPlanLookup | None = None,
     ) -> ScenarioProgressResult:
         """
         Map a lightweight memory row to its REST progress representation.
@@ -1986,6 +1991,9 @@ class ScenarioRunService:
         Returns:
             ScenarioProgressResult: The mapped progress delta.
         """
+        if plan_lookup is None:
+            plan_lookup = _ScenarioPlanLookup.from_plan(plan=plan)
+
         atomic_attack_name = str(delta.attribution_data.get("parent_collection") or "")
         eval_hash = delta.attribution_data.get("parent_eval_hash")
         atomic_group_id = config_hash(
@@ -2016,8 +2024,7 @@ class ScenarioRunService:
             seed_group_id = config_hash({"objective": delta.objective})
         result_kind, technique_name, attempt_index = ScenarioRunService._progress_result_semantics(
             delta=delta,
-            plan=plan,
-            atomic_group_id=atomic_group_id,
+            group_kind=planned_group.group_kind if planned_group is not None else None,
             atomic_attack_name=atomic_attack_name,
         )
         return ScenarioProgressResult(
@@ -2041,8 +2048,7 @@ class ScenarioRunService:
     def _progress_result_semantics(
         *,
         delta: ScenarioAttackResultDelta,
-        plan: ScenarioRunPlan | None,
-        atomic_group_id: str,
+        group_kind: ScenarioRunPlanGroupKind | None,
         atomic_attack_name: str,
     ) -> tuple[ScenarioProgressResultKind, str | None, int | None]:
         """
@@ -2063,17 +2069,14 @@ class ScenarioRunService:
             conversation_id=delta.conversation_id,
             atomic_attack_identifier=delta.atomic_attack_identifier,
         )
-        matching_group = (
-            next((group for group in plan.atomic_groups if group.id == atomic_group_id), None) if plan else None
-        )
-        if matching_group is not None:
-            if matching_group.group_kind is ScenarioRunPlanGroupKind.DIRECT_BASELINE:
+        if group_kind is not None:
+            if group_kind is ScenarioRunPlanGroupKind.DIRECT_BASELINE:
                 return ScenarioProgressResultKind.DIRECT_BASELINE, None, None
-            if matching_group.group_kind is ScenarioRunPlanGroupKind.ADAPTIVE:
+            if group_kind is ScenarioRunPlanGroupKind.ADAPTIVE:
                 return ScenarioProgressResultKind.ADAPTIVE_ORCHESTRATION, None, None
             if is_sequential_envelope:
                 return ScenarioProgressResultKind.AGGREGATE_PARENT, None, None
-            if matching_group.group_kind is ScenarioRunPlanGroupKind.ATTACK:
+            if group_kind is ScenarioRunPlanGroupKind.ATTACK:
                 return ScenarioProgressResultKind.ATTACK, None, None
 
         if atomic_attack_name == "baseline":

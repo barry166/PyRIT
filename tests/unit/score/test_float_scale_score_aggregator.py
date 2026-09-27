@@ -94,6 +94,18 @@ def test_float_scale_aggregator_category_deduplication():
     assert results[0].category == ["Hate"]  # Should be deduplicated
 
 
+def test_float_scale_aggregator_preserves_scores_without_rationales():
+    scores = [
+        _mk_score(0.5, rationale="explained"),
+        _mk_score(0.7),
+    ]
+
+    result = FloatScaleScoreAggregator.MAX(scores)[0]
+
+    assert "explained" in result.rationale
+    assert result.rationale.count("UnitTestScorer") == 2
+
+
 def test_float_scale_aggregator_multiple_categories_preserved():
     """Test that multiple unique categories are preserved and sorted."""
     scores = [

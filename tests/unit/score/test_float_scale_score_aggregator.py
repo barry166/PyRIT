@@ -96,14 +96,16 @@ def test_float_scale_aggregator_category_deduplication():
 
 def test_float_scale_aggregator_preserves_scores_without_rationales():
     scores = [
-        _mk_score(0.5, rationale="explained"),
-        _mk_score(0.7),
+        _mk_score(0.5, category=["Hate"], rationale="explained"),
+        _mk_score(0.7, category=["Violence"]),
     ]
 
     result = FloatScaleScoreAggregator.MAX(scores)[0]
 
-    assert "explained" in result.rationale
-    assert result.rationale.count("UnitTestScorer") == 2
+    assert result.rationale.splitlines() == [
+        "   - UnitTestScorer 0.5 (Category: Hate): explained",
+        "   - UnitTestScorer 0.7 (Category: Violence): ",
+    ]
 
 
 def test_float_scale_aggregator_multiple_categories_preserved():
